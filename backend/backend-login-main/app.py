@@ -13,22 +13,29 @@ from reportlab.pdfgen import canvas
 from notify_low_attendance import notify_students_from_attendance
 
 app = Flask(__name__)
-CORS(app)
+# Restrict CORS in production via env: ALLOWED_ORIGINS="http://localhost:3000,https://your-domain"
+allowed_origins = [o.strip() for o in os.getenv('ALLOWED_ORIGINS', '').split(',') if o.strip()]
+if allowed_origins:
+    CORS(app, origins=allowed_origins)
+else:
+    CORS(app)
 
-# Initialize Firebase Admin SDK
-cred = credentials.Certificate(os.path.join(os.path.dirname(__file__), 'firebase_service_account.json'))
+# Initialize Firebase Admin SDK (prefer env variable path)
+service_account_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS') or os.path.join(os.path.dirname(__file__), 'firebase_service_account.json')
+cred = credentials.Certificate(service_account_path)
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 
-# Example: Test Firestore connection
-try:
-    test_ref = db.collection('test').document('connection')
-    test_ref.set({'status': 'connected'})
-    print('Successfully connected to Firestore!')
-except Exception as e:
-    print('Firestore connection failed:', e)
+# Optional startup Firestore connectivity check (off by default)
+if os.getenv('ENABLE_STARTUP_TEST', '0') == '1':
+    try:
+        test_ref = db.collection('test').document('connection')
+        test_ref.set({'status': 'connected'})
+        print('Successfully connected to Firestore!')
+    except Exception as e:
+        print('Firestore connection failed:', e)
 
 # Dummy credentials (replace with DB in real apps)
 users = {
@@ -40,8 +47,10 @@ users = {
 otp_store = {}
 
 def send_otp_email(to_email, otp):
-    EMAIL_ADDRESS = 'attendancemanagementsysten@gmail.com'
-    EMAIL_PASSWORD = 'wycaviyrlztaimew'
+    EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS')
+    EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
+    if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
+        raise RuntimeError('Email credentials are not configured (set EMAIL_ADDRESS and EMAIL_PASSWORD).')
     msg = EmailMessage()
     msg['Subject'] = 'Your OTP for Password Reset'
     msg['From'] = EMAIL_ADDRESS
@@ -707,4 +716,5 @@ def api_notify_low_attendance():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    port = int(os.getenv('PORT', '5000'))
+    app.run(debug=False, use_reloader=False, host='0.0.0.0', port=port)

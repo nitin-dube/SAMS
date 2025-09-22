@@ -14,9 +14,9 @@ def init_firebase():
         firebase_admin.initialize_app(cred)
     db = firestore.client()
 
-# Email credentials
-Email_Address = "barnwalgourav547@gmail.com"
-Email_Password = "ushf ffjc gyph powz"
+# Email credentials via environment
+Email_Address = os.getenv("EMAIL_ADDRESS")
+Email_Password = os.getenv("EMAIL_PASSWORD")
 
 def send_email(to_email, subject, body):
     msg = EmailMessage()
@@ -25,6 +25,8 @@ def send_email(to_email, subject, body):
     msg["From"] = Email_Address
     msg["To"] = to_email
 
+    if not Email_Address or not Email_Password:
+        raise RuntimeError("Email credentials are not configured (EMAIL_ADDRESS/EMAIL_PASSWORD)")
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
         smtp.login(Email_Address, Email_Password)
         smtp.send_message(msg)
